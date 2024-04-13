@@ -16,6 +16,7 @@ from PIL import Image
 import torch.nn as nn
 
 import warnings
+
 warnings.filterwarnings("ignore")
 
 import glob
@@ -26,8 +27,32 @@ from torchvision import transforms
 from PIL import Image
 
 
+class VAE(nn.Module):
+    def __init__(self, input_dim: int = 1, latent_dim: int = 128, hidden_dim: List = None) -> None:
+        super(VAE, self).__init__()
+        self.input_dim = input_dim
+        self.latent_dim = latent_dim
 
-train_data = DataGenerator(data, transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.5], std=[0.5])   # Normalize for grayscale images
-]))
+        if hidden_dim is None:
+            self.hidden_dim = [16, 32, 64, 128, 256]
+        else:
+            self.hidden_dim = hidden_dim
+
+    def encoder(self) -> List[torch.Tensor]:
+        in_channel = self.input_dim
+
+        modules = []
+        for dims in self.hidden_dim:
+            modules.append(nn.Sequential(
+                nn.Conv2d(in_channel, dims, kernel_size=3, stride=2, padding=1)),
+                nn.BatchNorm2d(dims),
+            nn.PReLU())
+            in_channel = dims
+
+        self.encoder = nn.Sequential(*modules)
+        
+        mu = nn.Linear(self.hidden_dim[-1]*5, self.latent_dim)
+        var = nn.Linear(self.hidden_dim[-1]*5, self.latent_dim)
+
+        return [mu, var]
+    def decoder(self):
