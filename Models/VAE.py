@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Tuple, Any
 from torch.nn import Linear
 import torch.nn as nn
 
@@ -73,7 +73,8 @@ class VAE(nn.Module):
 
         return [mu, var]
 
-    def reparameterize(self, mu: Linear, var: Linear) -> torch.Tensor:
+    @staticmethod
+    def reparameterize(mu: Linear, var: Linear) -> torch.Tensor:
         """
         Reparameterization trick for sampling from the latent distribution.
 
@@ -103,32 +104,63 @@ class VAE(nn.Module):
         result = self.decoder(z)
         return self.final_layer(result)
 
-    def forward(self, input: torch.Tensor) -> torch.Tensor:
+    def forward(self, input: torch.Tensor) -> tuple[Any, Any, Any]:
         mu, var = self.encode(input)
         z = self.reparameterize(mu, var)
-        return self.decode(z)
+        return self.decode(z), mu, var
 
-    def kl_divergence(self, mu, logvar):
+    @staticmethod
+    def kl_divergence(mu, logvar, beta):
         """
-        Calculates the KL divergence between a standard normal distribution
-        and the distribution encoded by the VAE.
+        Calculates the KL divergence with a weight factor.
 
         Args:
-          mu: Tensor of mean values from the encoder (batch_size, latent_dim).
-          logvar: Tensor of logarithm of variances from the encoder (batch_size, latent_dim).
+            mu: Tensor of mean values from the encoder (batch_size, latent_dim).
+            logvar: Tensor of logarithm of variances from the encoder (batch_size, latent_dim).
+            beta: Weight factor for KL divergence (scalar).
 
         Returns:
-          Tensor: KL divergence loss (batch_size).
+            Tensor: KL divergence loss (batch_size).
         """
         # Epsilon for numerical stability
         epsilon = 1e-6
 
         # Standard normal distribution with zero mean and unit variance
-        # standard_normal_dist = torch.distributions.Normal(torch.zeros_like(mu), torch.ones_like(logvar))
+        standard_normal_dist = torch.distributions.Normal(torch.zeros_like(mu), torch.ones_like(logvar))
 
-        # KL divergence calculation (using element-wise operations)
-        kl_div = torch.mean(mu ** 2 + logvar - torch.log(logvar + epsilon) - 1, dim=1)
+        # KL divergence calculation with weight
+        kl_div = beta * torch.mean(mu ** 2 + logvar - torch.log(logvar + epsilon) - 1, dim=1)
         return kl_div
 
+    def loss(self, outputs: torch.Tensor, targets: torch.Tensor, mu: Linear, logvar: Linear,
+             reconstruction_criterion: nn.MSELoss = nn.MSELoss()) -> int:
+        """
+        Combined loss function for VAE with reconstruction and KL divergence.
+
+        Args:
+          outputs: Reconstructed image tensor from the VAE (batch_size, channels, height, width).
+          targets: Ground truth image tensor (batch_size, channels, height, width).
+          mu: Tensor of mean values from the encoder (batch_size, latent_dim).
+          logvar: Tensor of logarithm of variances from the encoder (batch_size, latent_dim).
+          reconstruction_criterion: Reconstruction loss function (default: nn.MSELoss()).
+
+        Returns:
+          Tensor: Combined loss (scalar).
+        """
+        # KL divergence loss
+        kl_div = self.kl_divergence(mu, logvar)
+
+        # Reconstruction loss
+        recon_loss = reconstruction_criterion(outputs, targets)
+
+        # Combine losses with weights (optional)
+        alpha = 1.0  # Weight for reconstruction loss
+        beta = 0.1  # Weight for KL divergence loss (adjust as needed)
+        combined_loss = alpha * recon_loss + beta * kl_div
+
+        return combined_loss
+
     def sample(self, num_samples: int) -> torch.Tensor:
-        return self.forward(self.decode(torch.randn(num_samples, self.latent_dim)))
+        z, _, _ = self.decode(torch.randn(num_samples, self.latent_dim))
+        generate_sample, _, _ = self.forward(z)
+        return generate_sample
