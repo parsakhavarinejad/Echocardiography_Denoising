@@ -7,6 +7,8 @@ import warnings
 warnings.filterwarnings("ignore")
 
 import torch
+
+
 class VAE(nn.Module):
     def __init__(self, input_dim: int = 1, latent_dim: int = 128, hidden_dim: List[int] = None) -> None:
         super(VAE, self).__init__()
@@ -38,7 +40,8 @@ class VAE(nn.Module):
         for i in range(len(hidden_decoder) - 1):
             decoder_modules.append(
                 nn.Sequential(
-                    nn.ConvTranspose2d(hidden_decoder[i], hidden_decoder[i + 1], kernel_size=3, stride=2, padding=1, output_padding=1),
+                    nn.ConvTranspose2d(hidden_decoder[i], hidden_decoder[i + 1], kernel_size=3, stride=2, padding=1,
+                                       output_padding=1),
                     nn.BatchNorm2d(hidden_decoder[i + 1]),
                     nn.LeakyReLU())
             )
@@ -47,7 +50,8 @@ class VAE(nn.Module):
 
         # Final layer for reconstructing the input
         self.final_layer = nn.Sequential(
-            nn.ConvTranspose2d(self.hidden_dim[-1], self.hidden_dim[-1], kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.ConvTranspose2d(self.hidden_dim[-1], self.hidden_dim[-1], kernel_size=3, stride=2, padding=1,
+                               output_padding=1),
             nn.BatchNorm2d(self.hidden_dim[-1]),
             nn.LeakyReLU(),
             nn.Conv2d(self.hidden_dim[-1], out_channels=3, kernel_size=3, padding=1),
@@ -99,4 +103,32 @@ class VAE(nn.Module):
         result = self.decoder(z)
         return self.final_layer(result)
 
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        mu, var = self.encode(input)
+        z = self.reparameterize(mu, var)
+        return self.decode(z)
 
+    def kl_divergence(self, mu, logvar):
+        """
+        Calculates the KL divergence between a standard normal distribution
+        and the distribution encoded by the VAE.
+
+        Args:
+          mu: Tensor of mean values from the encoder (batch_size, latent_dim).
+          logvar: Tensor of logarithm of variances from the encoder (batch_size, latent_dim).
+
+        Returns:
+          Tensor: KL divergence loss (batch_size).
+        """
+        # Epsilon for numerical stability
+        epsilon = 1e-6
+
+        # Standard normal distribution with zero mean and unit variance
+        # standard_normal_dist = torch.distributions.Normal(torch.zeros_like(mu), torch.ones_like(logvar))
+
+        # KL divergence calculation (using element-wise operations)
+        kl_div = torch.mean(mu ** 2 + logvar - torch.log(logvar + epsilon) - 1, dim=1)
+        return kl_div
+
+    def sample(self, num_samples: int) -> torch.Tensor:
+        return self.forward(self.decode(torch.randn(num_samples, self.latent_dim)))
