@@ -61,9 +61,3 @@ class DataGenerator(Dataset):
             image = self.image_transform(image)
 
         return image
-
-# # Example usage (assuming you have a DataFrame `data` containing image paths)
-# train_data = DataGenerator(data, transforms.Compose([
-#     transforms.ToTensor(),
-#     transforms.Normalize(mean=[0.5], std=[0.5])   # Normalize for grayscale images
-# ]))

@@ -4,6 +4,12 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 
+import torch
+from matplotlib import pyplot as plt
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+
+
 class VAETrainer:
     def __init__(self, model, train_loader, val_loader, optimizer, criterion):
         """
@@ -37,11 +43,11 @@ class VAETrainer:
 
         with tqdm(self.train_loader, desc=f"Epoch {epoch + 1}") as train_progress:  # Progress bar for training
             for data in train_progress:
-                inputs, targets = data.to(self.device)
+                inputs = data.to(self.device)
 
                 # Forward pass
                 outputs, mu, logvar = self.model(inputs)
-                loss = self.criterion(outputs, targets, mu, logvar)
+                loss = self.criterion(outputs, inputs, mu, logvar)
 
                 # Backward pass and update
                 self.optimizer.zero_grad()
